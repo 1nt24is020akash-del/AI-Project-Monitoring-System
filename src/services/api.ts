@@ -68,6 +68,44 @@ export async function getPortfolioSummary(): Promise<PortfolioSummary> {
   )
 }
 
+function extractYearNumber(dateStr?: string | null): number | null {
+  if (!dateStr) return null
+  const s = String(dateStr).trim()
+  if (s.includes("/")) {
+    const parts = s.split("/")
+    const last = parseInt(parts[parts.length - 1], 10)
+    if (!isNaN(last) && last > 1950) return last
+    const first = parseInt(parts[0], 10)
+    if (!isNaN(first) && first > 1950) return first
+  } else if (s.length === 4) {
+    const y = parseInt(s, 10)
+    if (!isNaN(y) && y > 1950) return y
+  } else if (s.includes("-")) {
+    const parts = s.split("-")
+    const y = parseInt(parts[0], 10)
+    if (!isNaN(y) && y > 1950) return y
+  }
+  return null
+}
+
+function extractDateSortScore(dateStr?: string | null): number {
+  if (!dateStr) return 0
+  const s = String(dateStr).trim()
+  if (s.includes("1900")) return 0
+  if (s.includes("/")) {
+    const parts = s.split("/")
+    if (parts.length === 2) {
+      const m = parseInt(parts[0], 10) || 1
+      const y = parseInt(parts[1], 10) || 0
+      return y * 100 + m
+    }
+  } else if (s.length === 4) {
+    const y = parseInt(s, 10) || 0
+    return y * 100 + 1
+  }
+  return 0
+}
+
 export async function getProjects(params?: {
   page?: number
   page_size?: number
@@ -78,6 +116,7 @@ export async function getProjects(params?: {
   tier?: string
   coverage?: string
   search?: string
+  year?: string | number
   sort_by?: string
   order?: string
 }): Promise<{
@@ -119,12 +158,75 @@ export async function getProjects(params?: {
   if (params?.coverage) {
     filtered = filtered.filter((p) => p.risk_coverage === params.coverage)
   }
+  if (params?.year) {
+    const yStr = String(params.year).trim().toLowerCase()
+    if (yStr === "pre-2018" || yStr === "pre_2018" || yStr === "pre2018") {
+      filtered = filtered.filter((p) => {
+        const y = extractYearNumber(p.approval_date)
+        return y !== null && y < 2018
+      })
+    } else {
+      const yNum = parseInt(yStr, 10)
+      if (!isNaN(yNum)) {
+        filtered = filtered.filter((p) => extractYearNumber(p.approval_date) === yNum)
+      }
+    }
+  }
+
+  // Sorting
+  const sortBy = params?.sort_by || "portfolio_rank"
+  const order = params?.order || "asc"
+  const isDesc = order.toLowerCase() === "desc"
+
+  if (sortBy === "approval_year" || sortBy === "approval_date" || sortBy === "year" || sortBy === "sanction_year") {
+    const withDate = filtered.filter((p) => extractDateSortScore(p.approval_date) > 0)
+    const withoutDate = filtered.filter((p) => extractDateSortScore(p.approval_date) === 0)
+    withDate.sort((a, b) => {
+      const sa = extractDateSortScore(a.approval_date)
+      const sb = extractDateSortScore(b.approval_date)
+      return isDesc ? sb - sa : sa - sb
+    })
+    filtered = [...withDate, ...withoutDate]
+  } else if (sortBy === "completion_year" || sortBy === "target_year" || sortBy === "doc") {
+    const withDate = filtered.filter((p) => extractDateSortScore(p.revised_doc || p.original_doc) > 0)
+    const withoutDate = filtered.filter((p) => extractDateSortScore(p.revised_doc || p.original_doc) === 0)
+    withDate.sort((a, b) => {
+      const sa = extractDateSortScore(a.revised_doc || a.original_doc)
+      const sb = extractDateSortScore(b.revised_doc || b.original_doc)
+      return isDesc ? sb - sa : sa - sb
+    })
+    filtered = [...withDate, ...withoutDate]
+  } else if (sortBy === "cost" || sortBy === "revised_cost_crore") {
+    filtered.sort((a, b) =>
+      isDesc
+        ? (b.revised_cost_crore || 0) - (a.revised_cost_crore || 0)
+        : (a.revised_cost_crore || 0) - (b.revised_cost_crore || 0)
+    )
+  } else if (sortBy === "progress" || sortBy === "physical_progress_pct") {
+    filtered.sort((a, b) =>
+      isDesc
+        ? (b.physical_progress_pct || 0) - (a.physical_progress_pct || 0)
+        : (a.physical_progress_pct || 0) - (b.physical_progress_pct || 0)
+    )
+  } else if (sortBy === "delay" || sortBy === "delay_months") {
+    filtered.sort((a, b) =>
+      isDesc
+        ? (b.delay_months || 0) - (a.delay_months || 0)
+        : (a.delay_months || 0) - (b.delay_months || 0)
+    )
+  } else {
+    filtered.sort((a, b) =>
+      isDesc
+        ? (b.portfolio_rank || 0) - (a.portfolio_rank || 0)
+        : (a.portfolio_rank || 0) - (b.portfolio_rank || 0)
+    )
+  }
 
   const fallbackPaged = {
     total_records: fallbackPortfolioSummary.total_projects || 1775,
     page: page,
     page_size: pageSize,
-    total_pages: Math.ceil(1775 / pageSize),
+    total_pages: Math.max(1, Math.ceil(filtered.length / pageSize)),
     data: filtered.slice((page - 1) * pageSize, page * pageSize),
   }
 

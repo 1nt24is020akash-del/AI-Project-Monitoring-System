@@ -4,6 +4,53 @@ from fastapi import APIRouter, HTTPException, Query, Request
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
+def extract_year(date_str: Optional[str]) -> Optional[int]:
+    if not date_str or not isinstance(date_str, str):
+        return None
+    s = date_str.strip()
+    if "/" in s:
+        parts = s.split("/")
+        last = parts[-1].strip()
+        if len(last) == 4 and last.isdigit():
+            return int(last)
+        first = parts[0].strip()
+        if len(first) == 4 and first.isdigit():
+            return int(first)
+    elif len(s) == 4 and s.isdigit():
+        return int(s)
+    elif "-" in s:
+        parts = s.split("-")
+        first = parts[0].strip()
+        if len(first) == 4 and first.isdigit():
+            return int(first)
+    return None
+
+
+def extract_date_sort_tuple(date_str: Optional[str]) -> tuple:
+    if not date_str or not isinstance(date_str, str):
+        return (0, 0)
+    s = date_str.strip()
+    if "1900" in s:
+        return (0, 0)
+    if "/" in s:
+        parts = s.split("/")
+        if len(parts) == 2:
+            try:
+                m, y = int(parts[0]), int(parts[1])
+                return (y, m)
+            except ValueError:
+                pass
+    elif len(s) == 4 and s.isdigit():
+        return (int(s), 1)
+    elif "-" in s:
+        parts = s.split("-")
+        try:
+            return (int(parts[0]), int(parts[1]) if len(parts) > 1 else 1)
+        except ValueError:
+            pass
+    return (0, 0)
+
+
 @router.get("")
 def get_projects(
     request: Request,
@@ -16,12 +63,13 @@ def get_projects(
     tier: Optional[str] = None,
     coverage: Optional[str] = None,
     search: Optional[str] = None,
+    year: Optional[str] = None,
     sort_by: str = Query("portfolio_rank"),
     order: str = Query("asc")
 ) -> Dict[str, Any]:
     """
     Paginated, filterable, and searchable catalog of infrastructure projects
-    with composite risk scores and intervention badges.
+    with composite risk scores, year-based sorting, and intervention badges.
     """
     projects: List[Dict[str, Any]] = request.app.state.scored_projects
 
@@ -48,10 +96,33 @@ def get_projects(
             or s_lower in str(p.get("source_project_id", ""))
             or s_lower in p.get("agency", "").lower()
         ]
+    if year:
+        y_str = str(year).strip().lower()
+        if y_str in ["pre-2018", "pre_2018", "pre2018"]:
+            filtered = [p for p in filtered if (extract_year(p.get("approval_date")) or 9999) < 2018]
+        elif y_str.isdigit():
+            target_y = int(y_str)
+            filtered = [p for p in filtered if extract_year(p.get("approval_date")) == target_y]
 
     # Sorting
     reverse = (order.lower() == "desc")
-    if sort_by in ["portfolio_rank", "attention_score", "cost_risk_probability", "project_name", "original_cost_crore", "cumulative_expenditure_crore", "physical_progress_pct"]:
+    if sort_by in ["approval_year", "approval_date", "year", "sanction_year"]:
+        with_dates = [p for p in filtered if extract_date_sort_tuple(p.get("approval_date")) != (0, 0)]
+        without_dates = [p for p in filtered if extract_date_sort_tuple(p.get("approval_date")) == (0, 0)]
+        with_dates.sort(key=lambda x: extract_date_sort_tuple(x.get("approval_date")), reverse=reverse)
+        filtered = with_dates + without_dates
+    elif sort_by in ["completion_year", "target_year", "doc", "revised_doc"]:
+        with_dates = [p for p in filtered if extract_date_sort_tuple(p.get("revised_doc") or p.get("original_doc")) != (0, 0)]
+        without_dates = [p for p in filtered if extract_date_sort_tuple(p.get("revised_doc") or p.get("original_doc")) == (0, 0)]
+        with_dates.sort(key=lambda x: extract_date_sort_tuple(x.get("revised_doc") or x.get("original_doc")), reverse=reverse)
+        filtered = with_dates + without_dates
+    elif sort_by in ["cost", "revised_cost_crore"]:
+        filtered.sort(key=lambda x: (x.get("revised_cost_crore") is None, x.get("revised_cost_crore", 0)), reverse=reverse)
+    elif sort_by in ["progress", "physical_progress_pct"]:
+        filtered.sort(key=lambda x: (x.get("physical_progress_pct") is None, x.get("physical_progress_pct", 0)), reverse=reverse)
+    elif sort_by in ["delay", "delay_months"]:
+        filtered.sort(key=lambda x: (x.get("delay_months") is None, x.get("delay_months", 0)), reverse=reverse)
+    elif sort_by in ["portfolio_rank", "attention_score", "cost_risk_probability", "project_name", "original_cost_crore", "cumulative_expenditure_crore"]:
         filtered.sort(key=lambda x: (x.get(sort_by) is None, x.get(sort_by, 0)), reverse=reverse)
 
     total_records = len(filtered)

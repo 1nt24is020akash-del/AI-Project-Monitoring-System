@@ -2,13 +2,19 @@ import { useEffect, useState } from "react"
 import {
   Activity,
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Calendar,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
   Filter,
   FolderKanban,
+  RotateCcw,
   Search,
+  SlidersHorizontal,
   TrendingUp,
 } from "lucide-react"
 import {
@@ -35,10 +41,12 @@ export default function ProjectMonitoring() {
   const [pageSize, setPageSize] = useState(15)
   const [loading, setLoading] = useState(true)
 
-  // Filters
+  // Filters and Sorting
   const [searchTerm, setSearchTerm] = useState("")
   const [sectorFilter, setSectorFilter] = useState("ALL")
   const [delayFilter, setDelayFilter] = useState("ALL")
+  const [yearFilter, setYearFilter] = useState("ALL")
+  const [sortOption, setSortOption] = useState("portfolio_rank:asc")
   const [monthlyTrends, setMonthlyTrends] = useState<any[]>([])
 
   useEffect(() => {
@@ -57,13 +65,16 @@ export default function ProjectMonitoring() {
 
   useEffect(() => {
     setLoading(true)
+    const [sortByParam, sortOrderParam] = sortOption.split(":")
+
     getProjects({
       page,
       page_size: pageSize,
       search: searchTerm || undefined,
       sector: sectorFilter === "ALL" ? undefined : sectorFilter,
-      sort_by: "portfolio_rank",
-      order: "asc",
+      year: yearFilter === "ALL" ? undefined : yearFilter,
+      sort_by: sortByParam,
+      order: sortOrderParam,
     })
       .then((res) => {
         let filtered = res.data
@@ -81,7 +92,34 @@ export default function ProjectMonitoring() {
         console.error("Failed to load projects:", err)
         setLoading(false)
       })
-  }, [page, pageSize, searchTerm, sectorFilter, delayFilter])
+  }, [page, pageSize, searchTerm, sectorFilter, delayFilter, yearFilter, sortOption])
+
+  const toggleYearSort = () => {
+    if (sortOption === "approval_year:desc") {
+      setSortOption("approval_year:asc")
+    } else if (sortOption === "approval_year:asc") {
+      setSortOption("portfolio_rank:asc")
+    } else {
+      setSortOption("approval_year:desc")
+    }
+    setPage(1)
+  }
+
+  const isFilteredOrSorted =
+    Boolean(searchTerm) ||
+    sectorFilter !== "ALL" ||
+    delayFilter !== "ALL" ||
+    yearFilter !== "ALL" ||
+    sortOption !== "portfolio_rank:asc"
+
+  const resetAllFilters = () => {
+    setSearchTerm("")
+    setSectorFilter("ALL")
+    setDelayFilter("ALL")
+    setYearFilter("ALL")
+    setSortOption("portfolio_rank:asc")
+    setPage(1)
+  }
 
   return (
     <div className="space-y-6">
@@ -142,50 +180,250 @@ export default function ProjectMonitoring() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by project name, ID, or executing agency..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value)
-              setPage(1)
-            }}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
-          />
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="relative flex-1 min-w-[260px]">
+            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by project name, ID, or executing agency..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value)
+                setPage(1)
+              }}
+              className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-blue-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Controls Group */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sector Filter */}
+            <select
+              value={sectorFilter}
+              onChange={(e) => {
+                setSectorFilter(e.target.value)
+                setPage(1)
+              }}
+              className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-2.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+              title="Filter by Sector"
+            >
+              <option value="ALL">All Sectors</option>
+              <option value="Railways">Railways</option>
+              <option value="Road Transport and Highways">Road Transport</option>
+              <option value="Power">Power</option>
+              <option value="Petroleum">Petroleum</option>
+              <option value="Coal">Coal</option>
+              <option value="Water Resources">Water Resources</option>
+              <option value="Atomic Energy">Atomic Energy</option>
+              <option value="Urban Development">Urban Development</option>
+              <option value="Civil Aviation">Civil Aviation</option>
+            </select>
+
+            {/* Delay Status Filter */}
+            <select
+              value={delayFilter}
+              onChange={(e) => {
+                setDelayFilter(e.target.value)
+                setPage(1)
+              }}
+              className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-2.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+              title="Filter by Schedule Status"
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="DELAYED">Delayed Only</option>
+              <option value="ON_TIME">On Schedule Only</option>
+            </select>
+
+            {/* Year Filter */}
+            <div className="flex items-center gap-1">
+              <select
+                value={yearFilter}
+                onChange={(e) => {
+                  setYearFilter(e.target.value)
+                  setPage(1)
+                }}
+                className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-2.5 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none"
+                title="Filter by Sanction Year"
+              >
+                <option value="ALL">All Sanction Years</option>
+                <option value="2026">Sanctioned 2026</option>
+                <option value="2025">Sanctioned 2025</option>
+                <option value="2024">Sanctioned 2024</option>
+                <option value="2023">Sanctioned 2023</option>
+                <option value="2022">Sanctioned 2022</option>
+                <option value="2021">Sanctioned 2021</option>
+                <option value="2020">Sanctioned 2020</option>
+                <option value="2019">Sanctioned 2019</option>
+                <option value="2018">Sanctioned 2018</option>
+                <option value="pre-2018">Sanctioned Pre-2018</option>
+              </select>
+            </div>
+
+            {/* SORT BY YEAR & ATTRIBUTES DROPDOWN */}
+            <div className="flex items-center gap-1">
+              <select
+                value={sortOption}
+                onChange={(e) => {
+                  setSortOption(e.target.value)
+                  setPage(1)
+                }}
+                className={`rounded-lg border py-1.5 px-2.5 text-xs font-semibold focus:border-blue-500 focus:outline-none transition ${
+                  sortOption.includes("year")
+                    ? "border-blue-400 bg-blue-50/80 text-blue-900"
+                    : "border-slate-200 bg-slate-50 text-slate-700"
+                }`}
+                title="Sort Projects by Year, Priority, Cost, or Delay"
+              >
+                <optgroup label="Sort by Year">
+                  <option value="approval_year:desc">📅 Sanction Year: Newest First (2026 → Oldest)</option>
+                  <option value="approval_year:asc">📅 Sanction Year: Oldest First (1983 → Newest)</option>
+                  <option value="completion_year:asc">🎯 Target DOC: Earliest Completion First</option>
+                  <option value="completion_year:desc">🎯 Target DOC: Furthest Completion First</option>
+                </optgroup>
+                <optgroup label="Standard Metrics">
+                  <option value="portfolio_rank:asc">🏆 Portfolio Priority Rank (Default)</option>
+                  <option value="cost:desc">💰 Revised Cost: Highest to Lowest</option>
+                  <option value="progress:desc">⚡ Physical Progress: Highest to Lowest</option>
+                  <option value="delay:desc">⏱️ Schedule Delay: Longest Delayed First</option>
+                </optgroup>
+              </select>
+            </div>
+
+            {/* Reset Button */}
+            {isFilteredOrSorted && (
+              <button
+                onClick={resetAllFilters}
+                className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
+                title="Reset all filters and sorting"
+              >
+                <RotateCcw size={12} />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={delayFilter}
-            onChange={(e) => {
-              setDelayFilter(e.target.value)
-              setPage(1)
-            }}
-            className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-3 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="DELAYED">Delayed Projects Only</option>
-            <option value="ON_TIME">On Schedule Only</option>
-          </select>
-        </div>
+        {/* Active Criteria Indicator Bar */}
+        {isFilteredOrSorted && (
+          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+            <span className="font-medium text-slate-700">Active view:</span>
+            {sortOption !== "portfolio_rank:asc" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 font-medium text-blue-800 text-[11px]">
+                <Calendar size={11} />
+                {sortOption === "approval_year:desc" && "Sorted by Sanction Year (Newest First)"}
+                {sortOption === "approval_year:asc" && "Sorted by Sanction Year (Oldest First)"}
+                {sortOption === "completion_year:asc" && "Sorted by Target DOC (Earliest First)"}
+                {sortOption === "completion_year:desc" && "Sorted by Target DOC (Furthest First)"}
+                {sortOption === "cost:desc" && "Sorted by Cost (Highest First)"}
+                {sortOption === "progress:desc" && "Sorted by Progress (Highest First)"}
+                {sortOption === "delay:desc" && "Sorted by Delay (Longest First)"}
+              </span>
+            )}
+            {yearFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 font-medium text-indigo-800 text-[11px]">
+                Year: {yearFilter}
+              </span>
+            )}
+            {sectorFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800 text-[11px]">
+                Sector: {sectorFilter}
+              </span>
+            )}
+            {delayFilter !== "ALL" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800 text-[11px]">
+                Status: {delayFilter === "DELAYED" ? "Delayed Only" : "On Schedule Only"}
+              </span>
+            )}
+            {searchTerm && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-800 text-[11px]">
+                Search: "{searchTerm}"
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Project Table */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left">
+          <table className="w-full min-w-[1020px] text-left">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500">
                 <th className="px-4 py-3">Project Title & Key</th>
                 <th className="px-4 py-3">Executing Agency</th>
                 <th className="px-4 py-3">Sector</th>
                 <th className="px-4 py-3">State</th>
-                <th className="px-4 py-3">Revised Cost</th>
+
+                {/* Interactive Year Column Header */}
+                <th
+                  onClick={toggleYearSort}
+                  className="px-4 py-3 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                  title="Click to toggle Sanction Year sort (Newest / Oldest)"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={sortOption.includes("approval_year") ? "text-blue-700 font-bold" : ""}>
+                      Sanction / DOC Year
+                    </span>
+                    {sortOption === "approval_year:desc" ? (
+                      <span className="flex items-center text-blue-600 font-bold text-[10px]">
+                        <ArrowDown size={12} /> New
+                      </span>
+                    ) : sortOption === "approval_year:asc" ? (
+                      <span className="flex items-center text-blue-600 font-bold text-[10px]">
+                        <ArrowUp size={12} /> Old
+                      </span>
+                    ) : (
+                      <ArrowUpDown size={12} className="text-slate-400 group-hover:text-blue-600 transition" />
+                    )}
+                  </div>
+                </th>
+
+                {/* Revised Cost Column Header */}
+                <th
+                  onClick={() => {
+                    setSortOption(sortOption === "cost:desc" ? "portfolio_rank:asc" : "cost:desc")
+                    setPage(1)
+                  }}
+                  className="px-4 py-3 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                  title="Click to sort by Revised Cost"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className={sortOption === "cost:desc" ? "text-blue-700 font-bold" : ""}>
+                      Revised Cost
+                    </span>
+                    {sortOption === "cost:desc" ? (
+                      <ArrowDown size={12} className="text-blue-600" />
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-300 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition" />
+                    )}
+                  </div>
+                </th>
+
                 <th className="px-4 py-3">Cumulative Outlay</th>
-                <th className="px-4 py-3">Physical Progress</th>
+
+                {/* Physical Progress Column Header */}
+                <th
+                  onClick={() => {
+                    setSortOption(sortOption === "progress:desc" ? "portfolio_rank:asc" : "progress:desc")
+                    setPage(1)
+                  }}
+                  className="px-4 py-3 cursor-pointer hover:bg-slate-100/80 transition select-none group"
+                  title="Click to sort by Physical Progress"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className={sortOption === "progress:desc" ? "text-blue-700 font-bold" : ""}>
+                      Physical Progress
+                    </span>
+                    {sortOption === "progress:desc" ? (
+                      <ArrowDown size={12} className="text-blue-600" />
+                    ) : (
+                      <ArrowUpDown size={11} className="text-slate-300 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition" />
+                    )}
+                  </div>
+                </th>
+
                 <th className="px-4 py-3">Schedule Status</th>
                 <th className="px-4 py-3">Tier</th>
               </tr>
@@ -193,7 +431,7 @@ export default function ProjectMonitoring() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-xs text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-xs text-slate-400">
                     <div className="flex items-center justify-center gap-2">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                       Loading authentic MoSPI project records...
@@ -202,7 +440,7 @@ export default function ProjectMonitoring() {
                 </tr>
               ) : projects.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-xs text-slate-400">
+                  <td colSpan={10} className="py-12 text-center text-xs text-slate-400">
                     No infrastructure projects found matching the criteria.
                   </td>
                 </tr>
@@ -231,6 +469,21 @@ export default function ProjectMonitoring() {
                     </td>
 
                     <td className="px-4 py-3 text-slate-600">{p.state}</td>
+
+                    {/* Timeline & Year Column */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-700">
+                            <Calendar size={11} className="text-blue-500" />
+                            {p.approval_date ? p.approval_date : "—"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">
+                          Target: {p.revised_doc || p.original_doc || "N/A"}
+                        </span>
+                      </div>
+                    </td>
 
                     <td className="px-4 py-3 font-semibold text-slate-800">
                       ₹{p.revised_cost_crore?.toLocaleString()} Cr
