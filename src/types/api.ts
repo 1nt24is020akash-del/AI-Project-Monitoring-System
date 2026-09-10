@@ -59,7 +59,12 @@ export interface Project {
       direction: string
       source_fact: string
     }>
+    explanation_method?: string
+    disclaimer?: string
+    [key: string]: any
   }
+  financial_progress_pct?: number | null
+  [key: string]: any
 }
 
 export interface PortfolioSummary {

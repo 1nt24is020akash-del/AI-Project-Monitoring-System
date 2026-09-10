@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
@@ -7,7 +8,7 @@ import pdfplumber
 
 logger = logging.getLogger(__name__)
 
-DATA_DIR = Path(r"C:\Users\Admin\Desktop\data")
+DATA_DIR = Path(os.environ.get("MOSPI_DATA_DIR", r"C:\Users\Admin\Desktop\data"))
 CACHE_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "projects_processed.json"
 PORTFOLIO_CACHE_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "portfolio_snapshots.json"
 
